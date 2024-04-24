@@ -1,0 +1,77 @@
+{% load static %}
+<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Speech App</title>
+            <link rel="stylesheet" type="text/css" href="{% static 'css/style.css' %}">
+            <!---<script src="{% static 'js/script.js' %}"></script>
+             Add CSS links here -->
+        </head>
+        <body style="color: white; text-align: center;">
+            <h1 style="color: white; text-align: center;">Robust Speech-GUI Integration Framework for Frontend Audio Detection and Tracking </h1>
+            <!---<img src="{% static 'siriwaiting.gif' %}"  alt="SIRI Waiting" class="gif">--->
+            <div id="tabsdata">
+                <input type="text" id="wake-word" name="wake-word" placeholder="Enter wake word...">
+                <button id="workModeBtn">IKLE Mode</button>
+                <button id="testModeBtn"> Test Mode</button>
+            
+            </div>
+            
+            <div id="workModeContent" style="display: none;">
+                <!-- Content for Work Mode 
+                <h2> Currently in Work Mode</h2>-->
+                <button id="stop-btn"  type="submit">Submit</button>
+                <form action="/process_audio/" method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    
+                
+            </form>
+                <!-- Add your speech input functionality here -->
+            </div>
+        
+            <div id="testModeContent" style="display: none;">
+                <!-- Content for Test Mode -->
+                <h2>Test Mode</h2>
+                <button id="startbtn">Start Recording</button>
+                <input type="text" id="key-word" name="wake-word" placeholder="Enter key word...">
+                <button id="stopbtn">Stop Recording</button>
+                
+                
+                <!-- Add your test mode content here -->
+            </div>
+            <div id="result-container"></div>
+            <div id="dictionary-container">
+                {% if output %}
+                <p>The probability of match</p><p>{{output}}</p>
+                {% endif %}
+                </div>
+                <!---{% if results %}
+                <h2>Dictionary</h2>
+                    {% if results|length > 0 %}
+                        {% for result in results %}
+                            <h2>Dictionary {{ forloop.counter }}</h2>
+                            {% for key, value in result.items %}
+                                <button onclick="handleButtonClick('{{ key }}', '{{ value }}')">{{ key }}: {{ value }}</button>
+                                <br>
+                            {% endfor %}
+                        {% endfor %}
+                    {% endif %}
+                {% endif %}
+
+            <script>
+                function handleButtonClick(key, value) {
+                    // Define different functionality based on key-value pair
+                    // For example, display an alert with the key and value
+                    alert('Clicked button for ' + key + ': ' + value);
+                }
+    </script>
+            </div>--->
+            <!-- Add script tag to include JavaScript file --->
+            <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+            <script src="{% static 'js/script.js' %}"></script>
+        </body>
+        </html>
+        

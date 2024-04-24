@@ -1,0 +1,101 @@
+body {
+    margin: 20px;
+    padding: 20px;
+    margin-top: 20px;
+    background-size:100% auto;
+    background-position: bottom;
+    background-image: url('my2.gif');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-position-y: -200px ;
+    background-color: black;
+    height: 70vh;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  }
+
+.content {
+    margin-top: 100rem; /* Adjust as needed */
+    padding: 1rem;
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent background for content */
+    border-radius: 10px;
+    text-align: center;
+}
+#wake-word {
+    margin-top: 0px; /* Adjust the value as needed */
+}
+.tab-container {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+}
+.gif {
+    width: 100%;
+    max-width: 600px;
+    margin-top: 20px;
+}
+.tab {
+    cursor: pointer;
+    padding: 10px 20px;
+    background-color: #f2f2f2;
+    border: 1px solid #ccc;
+    border-radius: 5px 5px 0 0;
+}
+
+.tab-content {
+    display: none;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 0 0 5px 5px;
+}
+#tabsdata {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 0vh; /* Adjust as needed */
+
+}
+#workModeBtn{
+    width: 200px;
+    height: 30px;
+    margin: 0 10px;
+    background-color: rgba(255, 255, 255, 0.7);
+}
+#testModeBtn{
+    width: 200px;
+    height: 30px;
+}
+#workModeContent{position: fixed;left: 50%;bottom: 500px; /* Adjust the distance from the bottom as needed */transform: translateX(-50%);text-align: center;color:#fff;font-style: italic;font-family: 'Courier New', Courier, monospace;font-weight: 300;font-weight: 02;}
+#startSpeechBtn {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #007bff; /* Blue color for the button */
+    color: #fff; /* White text color */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Style for the speech recognition button when hovered */
+#startSpeechBtn:hover {
+    background-color: #0056b3; /* Darker blue color on hover */
+}
+.stop-btn{
+    margin-top: 100px;
+    margin-left: 100px;
+}
+.panel {
+    width: 300px;
+    height: 200px;
+    background-color: #f0f0f0;
+    position: fixed;
+    top: 0;
+    right: -300px;
+    transition: right 0.3s ease-in-out;
+  }
+  
+  #closeBtn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }

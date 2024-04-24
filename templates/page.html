@@ -1,0 +1,158 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wake Word Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            text-align: center;
+            color:white;
+            
+        }
+
+        .back-button {
+            float: left;
+            margin-left: 0px;
+        }
+
+        .gif {
+            max-width: 80px;
+            max-height: 80px;
+            float: right;
+            margin-right: 10px;
+        }
+        .arr {
+            max-width: 80px;
+            max-height: 80px;
+            float: left;
+            margin-left: 10px;
+        }
+
+        .content {
+            margin-top: 50px;
+            /* Adjust as needed */
+        }
+
+        .figure {
+            /* Style for your figure */
+            margin-left: 10px;
+            align-items: left;
+            max-width: 10px;
+            max-height: 10px;
+            
+        
+        }
+
+        .buttons {
+            margin-top: 70px;
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between;
+            /* Adjust as needed */
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        
+
+        
+    </style>
+</head>
+
+<body id="bodyid">
+    <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
+        <a href="{% url 'main' %}" class="back-btn"><img src="{% static 'backarow2.png' %}" alt="back button" class="arr"></a>
+        <h1>Wake word detected</h1>
+        <img src="{% static 'miclistening2.gif' %}" alt="Listening GIF" class="gif">
+    </div>
+    <h3>Now listening for your command....</h3>
+        
+    <div class="content">
+        <div class="figure" id="touchPathContainer">
+            <!-- Your figure content goes here--->
+            <!-- FILEPATH: /Users/beulah_karrolla/Desktop/project/lab_jupyter_nb/abc.html -->
+    <!-- BEGIN: graph 
+    <div id="graphContainer">
+        <svg id="graphSvg" width="400" height="700">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                    <polygon points="0 0, 7 3.5, 0 7" fill="black" />
+                </marker>
+            </defs>
+            <g>
+                <circle cx="50" cy="150" r="30" fill="yellow"/>
+                <text x="50" y="150" text-anchor="middle" alignment-baseline="middle" fill="black">Education</text>
+                <circle cx="150" cy="130" r="30" fill="pink" />
+                <text x="150" y="130" text-anchor="middle" alignment-baseline="middle" fill="black">Technology</text>
+                <circle cx="250" cy="190" r="30" fill="green" />
+                <text x="250" y="190" text-anchor="middle" alignment-baseline="middle" fill="black">Presentation</text>
+                <circle cx="30" cy="250" r="30" fill="blue" />
+                <text x="30" y="250" text-anchor="middle" alignment-baseline="middle" fill="white">References</text>
+                <circle cx="140" cy="280" r="30" fill="red" />
+                <text x="140" y="280" text-anchor="middle" alignment-baseline="middle" fill="black">Direction</text>
+                <circle cx="300" cy="310" r="30" fill="orange" />
+                <text x="300" y="310" text-anchor="middle" alignment-baseline="middle" fill="black">Grdauation</text>
+                <line x1="120" y1="130" x2="80" y2="150" stroke="black" marker-end="url(#arrowhead)" />
+                <line x1="50" y1="180" x2="30" y2="220" stroke="black" marker-end="url(#arrowhead)" />
+                <line x1="60" y1="250" x2="110" y2="280" stroke="black" marker-end="url(#arrowhead)" />
+                <line x1="70" y1="170" x2="140" y2="250" stroke="black" marker-end="url(#arrowhead)" />
+                <line x1="170" y1="150" x2="220" y2="190" stroke="black" marker-end="url(#arrowhead)" />
+                <line x1="270" y1="310" x2="170" y2="280" stroke="black" marker-end="url(#arrowhead)" />
+            </g>
+        </svg>
+    </div>-->
+    <!-- END: graph -->
+            <img  id = "imgline" src="{% static 'pipeline.png' %}" alt="Figure" width="1000px" height="600px" style="position: absolute; top: 350px; left: 20px;">
+        </div>
+        <div class="buttons">
+            {% if results %}
+            {% if results|length > 0 %}
+            {% for res in results %}
+            <button class="button" id="{{ res }}">{{res}}</button>
+            
+            <script>
+                var parsedRes = JSON.parse('{{ res|safe }}'.replace(/'/g, '"'));
+                var wordp = parsedRes['word'];
+                const button = document.getElementById('{{ res }}');
+                button.innerHTML = wordp;
+                
+                document.write(parsedRes['word']);
+            </script>
+            <br>
+
+            
+            {% endfor %}
+            {% endif %}
+            {% endif %}
+
+            
+        </div>
+    </div>
+    <script src="{% static 'js/pagescript.js' %}"></script>
+</body>
+
+</html>
