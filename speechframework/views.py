@@ -1,15 +1,9 @@
-#from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.template import loader
 import socket               # Import socket module
-import sys
-import threading    # threading without a target function will create a dummy thread which can sometimes serve as a placeholder for furthur complex operations
 import pyaudio
-#from jupyterplot import ProgressPlot
 import torch
 from speechframework.models import SpeechClassifierModel, ConformerModel
-#from django.models import SpeechClassifierModel, ConformerModel
-#from models import SpeechClassifierModel, ConformerModel
 import numpy as np
 import wave
 from speechbrain.processing.features import STFT, spectral_magnitude, Filterbank, Deltas, InputNormalization, ContextWindow
@@ -35,9 +29,6 @@ def home1(request, results):
     return HttpResponse(template.render(context, request))  # Pass the context to the template
 # Create your views here.
 
-'''def speeechframework(request):
-  template = loader.get_template('main.html')
-  return HttpResponse(template.render())'''
 AUD =[]
 @csrf_protect
 def process_audio(request):
@@ -169,8 +160,6 @@ def process_frame(indata, frames,data, time, status, model, request):
             output = model(features, text)
         
         best = np.where(output < 0.999, 0, 1)
-        #if output> 0.9:
-            #import ipdb;ipdb.set_trace()
         
         temp2 = best
         if temp2 !=1:
@@ -202,9 +191,6 @@ def audio_main(request):
 
     frames = []
     device = torch.device('cpu')
-    # Load the pretrained model checkpoint
-    #checkpoint_path = "/homes/2/karrolla.1/KWD/saved/debug_mode/upsample_minority_debug_1_3_lstm_80.pt"
-    #checkpoint_path = "/Users/beulah_karrolla/Desktop/project/lab_jupyter_nb/upsample_minority_debug_1_3_lstm_80.pt"
     checkpoint_path = "/Users/beulah_karrolla/Desktop/project/best_models/word_level_train_015_256_bert1_st00_2fc_conf_16_sig_bce_rop_80.pt"
     pretrained_model = torch.load(checkpoint_path, map_location=device)
     model_state_dict = pretrained_model["model_state_dict"]
@@ -224,9 +210,6 @@ def audio_main(request):
     host = socket.gethostname() # Get local machine name
     port = 7012                 # Reserve a port for your service.
 
-    #host = "cse-d01187744s.coeit.osu.edu"
-    #host = 'boulder.cse.ohio-state.edu'
-    #host = '127.0.0.1'
     global wake_word_detector
     print("Waiting for the wake word to start the recording (Wake word detector):")
     newpage = work_method(stream, model, request)
@@ -267,36 +250,18 @@ def page_method(request):
             print("sent")
             received_data = s.recv(1024)
             print(received_data)
-            '''try:
-                print("***")
-                received_data = s.recv()
-                print(received_data)
-            except:
-                continue '''
-            # Process the received data as needed
 
         except:
-            #c.recv(1024)
             print("Server sent a closing signal ....might be the connection was closed by the server")
             continue_recording = False
             s.close()
-            #work_method(stream, model, request)
             stream.stop_stream()
             stream.close()
             audio.terminate()
-            #import pdb;pdb.set_trace()
             results = ast.literal_eval(received_data.decode('utf-8'))
-            
             print(results)
-            
-            #home1(request, results)
-            #import pdb;pdb.set_trace()
-            #request.session['results'] = results
-            #eturn render()
             return render(request, 'page.html', context={'results': results})
-            #return render(request, 'page.html', {'data': results})
-            #return render(request, 'main.html')
-        #s.recv(1024)
+            
 
 
 def work_method(stream, model, request):
@@ -311,55 +276,4 @@ def work_method(stream, model, request):
         wake_word_detector = process_frame(curr_chunk,frames, data, 0, 0, model, request)
         if wake_word_detector:
             return wake_word_detector
-            render(request, 'page.html')
-            #request.render('page.html')
-            import pdb;pdb.set_trace() 
-            res = False
-            print(".................", end = '')
-            #print("The wake word has been detected")
-    
-            #work_method()
-#work_method()
-
-'''class DiagnoseDICOMImage(View):
-
-    def process_input_1(self, file_name):
-        loaded_dicom = exposure.equalize_adapthist(pydicom.read_file(file_name).pixel_array).reshape(512, 512, 1)
-        tf_tensor = tf.image.grayscale_to_rgb(tf.convert_to_tensor(loaded_dicom))
-        return np.array(tf_tensor.eval())
-
-    def process_input_2(self, file_name):
-        loaded_dicom = exposure.equalize_adapthist(pydicom.read_file(file_name).pixel_array).reshape(512, 512, 1)
-        return loaded_dicom
-
-    def post(self, request):
-        for filename in os.listdir('media'):
-            file_path = 'media/' + filename
-            if os.path.exists(file_path):
-                os.remove(file_path)
-
-        immemoryfile = request.FILES['dicom_image']
-        fs = FileSystemStorage()
-        filename = fs.save(immemoryfile.name, immemoryfile)
-        dicom_model_1 = keras.models.load_model("./model_vgg_dicom.h5")
-        dicom_model_2 = keras.models.load_model("./model_resnet(1).h5")
-        classes = {0: 'Negative', 1: 'Benign', 2: 'Malign'}
-
-        with tf.Session() as sess:
-            print('global_variables_initializer...')
-            sess.run(tf.global_variables_initializer())
-            test_image = Image.fromarray(pydicom.read_file('media/' + filename).pixel_array)
-            test_image.convert('L').save('media/test.png')
-            data_1 = self.process_input_1('media/' + filename)
-            data_2 = self.process_input_2('media/' + filename)
-
-            prediction_1 = dicom_model_1.predict(data_1.reshape([1, 512, 512, 3]), batch_size=1)
-            prediction_2 = dicom_model_2.predict(data_2.reshape([1, 512, 512, 1]), batch_size=1)
-
-        final_prediction = prediction_1[0] + prediction_2[0]
-        predicted_probability = max(final_prediction)
-        predicted_class = list(final_prediction).index(predicted_probability)
-
-        return render(request, 'Results.html', context={'source_image': 'media/test.png',
-                                                        'predicted_probability': round(predicted_probability / 2, 4),
-                                                        'predicted_class': classes[predicted_class]})'''
+            
