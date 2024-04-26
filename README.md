@@ -19,4 +19,7 @@ transcription, meticulously timestamped to align with concurrently captured GUI 
 The system demonstrates robustness, offering full functionality either on-device or
 partially in the cloud via socket communication.
 
+
+[Detailed project report online version](https://drive.google.com/file/d/1E15Q1RK25Z6BZQgCl_zwUFvqaYhEgOtn/view?usp=sharing)
+
 ##### Copyrighted by Beulah Karrolla 2024
