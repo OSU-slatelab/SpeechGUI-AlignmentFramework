@@ -27,12 +27,23 @@ SAMPLE_RATE = 16000
 CHUNK = 1024
 
 
-def home(request):
+def home():
+    """
+    The home page of the website saved at main.html
+    :return: The rendered template
+    
+    """
     template = loader.get_template('main.html')
     return HttpResponse(template.render())
 
 
 def save_file(data):
+    """
+    Saves the audio file to the disk
+    :param data: List of audio data chunks
+    :return: The name of the saved file
+    
+    """
     output_file = "my_voice.wav"
     sample_width = 2  # 2 bytes for 16-bit audio, 1 byte for 8-bit audio
     with wave.open(output_file, 'wb') as wf:
@@ -47,6 +58,13 @@ def save_file(data):
 
 
 def audio_main(request):
+    """
+    The initial method for the audio processing on IKLE mode from the home page
+    :param request: The request object
+    :return: The rendered template
+    :description: This method opens the audio stream, loads the wake word model and waits for the wake word to start the recording, once detected, it renders the page.html template
+
+    """
     audio = pyaudio.PyAudio()
     stream = audio.open(format=FORMAT,
                         channels=CHANNELS,
@@ -74,6 +92,14 @@ def audio_main(request):
 
 
 def work_method(stream, model, request):
+    """
+    The main method for the audio processing
+    :param stream: The open stream object
+    :param model: Wake word detection model
+    :param request: The request object
+    :return: The presence/absence of the wake word after double checking the transcription
+    :description: This method processes the incoming audio frames to look for the wake word
+    """
     frames = []
     data = []
     res = True
@@ -98,6 +124,17 @@ def work_method(stream, model, request):
 
 
 def process_frame(indata, frames, data, model, request):
+    """
+    Process the audio frame
+    :param indata: The current input chunk of audio data
+    :param frames: The list of frames for collecting the audio data
+    :param data: The audio data accumulated so far
+    :param model: The wake word detection model
+    :param request: The request object
+    :return: The presence/absence of the wake word
+    :description:  Audio preprocessing -> feature extraction -> input to the model -> Thresholding the output
+
+    """
     indata = np.frombuffer(indata, np.int8)
     a = int(indata.size)
     if a < 1024:
@@ -118,7 +155,7 @@ def process_frame(indata, frames, data, model, request):
         features = spectral_magnitude(features)
         features = filterbank(features)
         features = pack_sequence(features, enforce_sorted=False)
-        text = request.body.decode()
+        text = request.body.decode() # The word selected by the user on the front end
         text = TOK(text).input_ids
         text = torch.tensor(text)
         text = [text]
@@ -136,6 +173,12 @@ def process_frame(indata, frames, data, model, request):
 
 
 def int2float(sound):
+    """
+    Convert the integer audio data to float
+    :param sound: The audio data
+    :return: The audio data in float format
+
+    """
     abs_max = np.abs(sound).max()
     sound = sound.astype('float32')
     if abs_max > 0:
@@ -154,6 +197,13 @@ vad_iterator = VADIterator(model_vad)
 
 
 def page_method(request):
+    """
+    This method load on the page.html template
+    :param request: The request object
+    :return: The rendered template
+    :description: Record the incoming audio, till 5 second of silence is detected, then transcribe the audio and align the transcription with the audio
+
+    """
     wake_word_detector = True if request.method == 'POST' else False
     audio = pyaudio.PyAudio()
     stream = audio.open(format=FORMAT,
@@ -200,7 +250,6 @@ def page_method(request):
             continue_recording = False
             stream.stop_stream()
             stream.close()
-            # audio.terminate()
             results = result2["word_segments"]
             print(results)
             return render(request, 'page.html', context={'results': results})
