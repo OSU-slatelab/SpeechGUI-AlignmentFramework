@@ -130,9 +130,8 @@ STATICFILES_DIRS = [
 ]
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SECURE = False
-# Media files (Docs uploaded by user are stored here)
+''' Media files (Docs uploaded by user are stored here)
 
-#MEDIA_URL = '/media/'
+MEDIA_URL = '/media/'
 
-#MEDIA_ROOT = os.path.join(BASE_DIR, "media")
-
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")'''

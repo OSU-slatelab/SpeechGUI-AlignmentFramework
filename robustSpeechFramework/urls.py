@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 from speechframework import views
-from speechframework.views import audio_main, process_audio, process_frame, save_file, page_method
+from speechframework.views import audio_main, page_method
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic.base import TemplateView
@@ -28,10 +28,8 @@ urlpatterns = [
     path('main/', TemplateView.as_view(template_name='main.html'), name='main'),
     path("", include("speechframework.urls")),
     path('admin/', admin.site.urls),
-    #path("", views.home, name="home"),
-    path('process_audio/', process_audio, name='process_audio'),
     path('process-frame/', views.audio_main, name='audio_main'),
     path('audio_main/', audio_main, name='audio_main'),
-    path('page/', TemplateView.as_view(template_name='page.html'), name='page'), 
+    path('page/', TemplateView.as_view(template_name='page.html'), name='page'),
     path('page_method/', page_method, name='page_method'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
