@@ -22,4 +22,4 @@ partially in the cloud via socket communication.
 
 [Detailed project report online version](https://drive.google.com/file/d/1E15Q1RK25Z6BZQgCl_zwUFvqaYhEgOtn/view?usp=sharing)
 
-##### Copyrighted by Beulah Karrolla 2024
+##### Project Report Copyrighted by Beulah Karrolla 2024
