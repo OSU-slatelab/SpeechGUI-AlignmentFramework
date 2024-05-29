@@ -1,6 +1,6 @@
 from django.http import HttpResponse
 from django.template import loader
-from whisperX import whisperx
+import whisperx
 import pyaudio
 import torch
 from speechframework.models import ConformerModel
