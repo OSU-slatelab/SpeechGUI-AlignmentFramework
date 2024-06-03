@@ -41,6 +41,6 @@ Starting development server at http://127.0.0.1:8000/
 Open the provided web address in your browser. You can then select a wake word and choose whether you want to enter test mode or ICICLE mode.
 
 ### Further Project Details
-[Detailed project report online version](https://drive.google.com/file/d/1E15Q1RK25Z6BZQgCl_zwUFvqaYhEgOtn/view?usp=sharing)
+[Detailed project report online version](https://drive.google.com/file/d/1i3HduZss34OITY5m-iiUpS_7w9VApUtW/view?usp=sharing)
 
 ##### Project Report Copyrighted by Beulah Karrolla 2024
