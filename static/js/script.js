@@ -5,8 +5,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const workModeContent = document.getElementById('workModeContent');
     const testModeContent = document.getElementById('testModeContent');
     
-    //console.log({ results })
-
     // Event listeners for the buttons
     workModeBtn.addEventListener('click', function() {
         const csrftoken = getCookie('csrftoken');
@@ -45,7 +43,6 @@ document.addEventListener('DOMContentLoaded', function() {
         testModeContent.style.display = 'block';
     });
 });
-// Define variables to hold the recording stream and media recorder
 
 function getCookie(name) {
     const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
@@ -53,14 +50,53 @@ function getCookie(name) {
 }
 
 
-// Event listener for the "Start Recording" button
 document.getElementById('stop-btn').addEventListener('click', function(){
     var queryParams = '?stream=value1&param2=value2';
     var pageUrl = '/page/' + queryParams; 
     window.location.href = pageUrl;
 });
-
-
-// Event listener for the "Stop Recording" button
-
-//document.getElementById('stop-btn').addEventListener('click', stopRecording);
+document.getElementById('startbtn').addEventListener('click', function(){
+    const csrftoken = getCookie('csrftoken');
+    kwd = document.getElementById('key-word')
+    fetch('/process_audio/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrftoken
+        },
+        
+        body: JSON.stringify({ kwd: kwd.value, res:true  })
+    })
+    
+    .then(response => response.text())
+    .then(data => {
+        console.log("Received response from backend:", data);
+    })
+    .catch(error => {
+        console.error("Error sending audio data to backend:", error);
+    });
+});
+document.getElementById('stopbtn').addEventListener('click', function(){
+    const csrftoken = getCookie('csrftoken');
+    kwd = document.getElementById('key-word')
+    fetch('/process_audio/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrftoken
+        },
+        
+        body: JSON.stringify({ kwd: kwd.value, res:false  })
+    })
+    
+    .then(response => response.text())
+    .then(data => {
+        console.log("Received response from backend:", data);
+        const testModeContent = document.getElementById('testModeContent');
+    
+        testModeContent.style.display = 'block';
+        document.body.innerHTML = data
+        })
+    .catch(error => {
+        console.error("Error in stop button:", error);
+    });
+    
+});
