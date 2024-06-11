@@ -36,6 +36,75 @@ def home():
     template = loader.get_template('main.html')
     return HttpResponse(template.render())
 
+AUD =[]
+@csrf_protect
+def process_audio(request):
+    global AUD
+    checkpoint_path = "word_level_train_015_256_bert1_st00_2fc_conf_16_sig_bce_rop_80.pt"
+    pretrained_model = torch.load(checkpoint_path, map_location='cpu')
+    model_state_dict = pretrained_model["model_state_dict"]
+    model_params = {'num_classes': pretrained_model['model_params']['num_classes'],
+                        'feature_size': pretrained_model['model_params']['feature_size'],
+                        'hidden_size': pretrained_model['model_params']['hidden_size'],
+                        'num_layers': pretrained_model['model_params']['num_layers'],
+                        'dropout': pretrained_model['model_params']['dropout'],
+                        'bidirectional': pretrained_model['model_params']['bidirectional'],
+                        'device': 'cpu'}
+    model = ConformerModel(**model_params)
+    model.load_state_dict(model_state_dict)
+    model.eval()
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    res1 = request.body.decode()
+
+    t1 =json.loads(res1)
+    res = t1['res']
+    text = t1['kwd']
+    SAMPLE_RATE = 16000
+    CHUNK = 1024 #int(SAMPLE_RATE / 10) # Still has to differntiate between various chunk sizes
+    num_samples = 1536
+    audio = pyaudio.PyAudio()
+    stream = audio.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=SAMPLE_RATE,
+                    input=True,
+                    frames_per_buffer=1024)
+    while res:
+        data = stream.read(1024, exception_on_overflow = False)
+        AUD.append(data)
+    if not res:
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+        print(len(AUD))
+        filename = save_file(AUD)
+        AUD = []
+        output = process_frame_new(filename, model, text)
+        return render(request, template_name='main.html', context={'output': output})
+
+def process_frame_new(file, model, text):
+        filterbank = Filterbank(n_mels=40)
+        stft = STFT(sample_rate=16000, win_length=25, hop_length=10, n_fft=400)
+        wavform, sr = torchaudio.load(file)
+
+        wavform = wavform.type('torch.FloatTensor')
+        if sr > 16000:
+            wavform = torchaudio.transforms.Resample(sr, 16000)(wavform)
+        features = stft(wavform)
+        features = spectral_magnitude(features)
+        features = filterbank(features)
+        features = pack_sequence(features, enforce_sorted=False)
+        text = text
+        #print(TOK.convert_ids_to_tokens(TOK(text).input_ids))
+        text = TOK(text).input_ids
+        text = torch.tensor(text)
+        text = [text]
+        text = pack_sequence(text, enforce_sorted=False)
+
+
+        with torch.no_grad():
+            output = model(features, text)
+        return output
 
 def save_file(data):
     """
