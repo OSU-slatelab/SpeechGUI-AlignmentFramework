@@ -28,7 +28,7 @@ urlpatterns = [
     path('main/', TemplateView.as_view(template_name='main.html'), name='main'),
     path("", include("speechframework.urls")),
     path('admin/', admin.site.urls),
-    path('process_audio/', process_audio, name='process_audio'),
+    path('process_audio/', views.process_audio, name='process_audio'),
     path('process-frame/', views.audio_main, name='audio_main'),
     path('audio_main/', audio_main, name='audio_main'),
     path('page/', TemplateView.as_view(template_name='page.html'), name='page'),

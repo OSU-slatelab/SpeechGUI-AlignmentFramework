@@ -12,6 +12,7 @@ from torch.nn.utils.rnn import pack_sequence
 from transformers import BertTokenizer
 from django.shortcuts import render
 import torch.nn as nn
+import json
 TOK = BertTokenizer.from_pretrained('bert-base-uncased')
 
 
@@ -37,7 +38,6 @@ def home():
     return HttpResponse(template.render())
 
 AUD =[]
-@csrf_protect
 def process_audio(request):
     global AUD
     checkpoint_path = "word_level_train_015_256_bert1_st00_2fc_conf_16_sig_bce_rop_80.pt"
