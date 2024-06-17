@@ -84,6 +84,7 @@ function captureAndSendAudio() {
 
 // Call the function to start capturing and sending audio when the page loads
 window.onload = function() {
+    // alls the audio_main view in views.py, which detects the wake word then renders page.html
     fetch('/process_frame/')
         .then(response => response.json())
         .then(data => {
