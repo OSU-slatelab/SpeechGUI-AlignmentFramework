@@ -9,6 +9,9 @@ import torchaudio
 from torch.nn.utils.rnn import pack_sequence
 from transformers import BertTokenizer
 import torch.nn as nn
+import sys
+from string import punctuation
+from pdb import set_trace as bp
 
 
 TOK = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -49,12 +52,25 @@ def save_file(data):
         wf.close()
     return output_file
 
+def load_wavform(file):
+    """
+    Loads wavform file with a sample rate of 16000
+    :file: The path to the file to load
+    :return: The loaded wavform object
+    """
+    wavform, sr = torchaudio.load(file)
+
+    wavform = wavform.type('torch.FloatTensor')
+    if sr > 16000:
+        wavform = torchaudio.transforms.Resample(sr, 16000)(wavform)
+    return wavform
+
+
 def get_features(wavform):
     """
     Extracts features from the audio data
     :param wavform: The audio data
     :return: The extracted features
-    
     """
     filterbank = Filterbank(n_mels=40)
     stft = STFT(sample_rate=16000, win_length=25, hop_length=10, n_fft=400)
@@ -83,15 +99,13 @@ def get_text(request):
 
 def get_match_probs(indata, frames, data, model, request):
     """
-    if enough frames are collected, checks for the presence of the wake word
+    If enough frames are collected, gets the probability they match the wake word
     :param indata: The current input chunk of audio data
     :param frames: The list of frames for collecting the audio data
     :param data: The audio data accumulated so far
     :param model: The wake word detection model
     :param request: The request object
-    :return: The probability the wake word is present in the given audio segments
-    :description:  Audio preprocessing -> feature extraction -> input to the model -> Thresholding the output
-
+    :return: The probability the wake word is present in the given audio segments or None if not enough frames
     """
     # get most recent audio chunk into np array of size 1024
     indata = np.frombuffer(indata, np.int8)
@@ -104,37 +118,46 @@ def get_match_probs(indata, frames, data, model, request):
     num_frames = 16
 
     # if we have enough frames, we can run the model
+    output = None
     if len(frames) >= num_frames:
         # save the audio data to a file
         wav_file = save_file(data)
         data.pop(0)
         # clear the frames list
-        frames.pop(0)  
-        wavform, sr = torchaudio.load(wav_file)
-        wavform = wavform.type('torch.FloatTensor')
-        if sr > 16000:
-            wavform = torchaudio.transforms.Resample(sr, 16000)(wavform)
+        frames.pop(0)
+        wavform = load_wavform(wav_file)
         features = get_features(wavform)
         # The word selected by the user on the front end
         text = get_text(request)
         with torch.no_grad():
             output = model(features, text)
-
-        return output
+    return output
     
 
 def check_for_word(indata, frames, data, model, request):
-        output = get_match_probs(indata, frames, data, model, request)
-        # If the model outputs the word is detected with a confidence of 0.75 or more, we return True
-        best = np.where(output < 0.75, 0, 1)
-        if best != 1:
-            print(".................")
-            return False, output
-        else:
-            print(output)
-            print("Detected", end='')
-            return True, output
+    """
+    Determines if a word was found
+    :param indata: The current input chunk of audio data
+    :param frames: The list of frames for collecting the audio data
+    :param data: The audio data accumulated so far
+    :param model: The wake word detection model
+    :param request: The request object
+    :returns: whether a word was found and the match probability if it was found (otherwise None)
+    """
+    output = get_match_probs(indata, frames, data, model, request)
+    # If the model outputs the word is detected with a confidence of 0.75 or more, we return True
+    if output is None or np.where(output < 0.75, 0, 1) != 1:
+        return False, None
+    else:
+        print(f"\nDetected a word with {output} confidence")
+        return True, output
 
+
+def strip_format(s):
+    s = s.translate(str.maketrans('', '', punctuation))
+    s = s.strip()
+    s = s.lower()
+    return s
 
 def wait_to_wake(stream, model, request):
     """
@@ -148,29 +171,32 @@ def wait_to_wake(stream, model, request):
     frames = []
     data = []
     res = True
+    print("Now waiting....")
     while res:
         # add the current chunk to the data list
         curr_chunk = stream.read(1024, exception_on_overflow=False)
         data.append(curr_chunk)
-        print("....waiting....", end='')
         # check if the wake word is detected
-        is_wake_word, wake_probs = check_for_word(curr_chunk, frames, data, model, request)
-        if is_wake_word:
-            res = False
+        is_word, wake_probs = check_for_word(curr_chunk, frames, data, model, request)
+        if is_word:
             # save the audio data to a file
             wav_file = save_file(data)
             audio = whisperx.load_audio(wav_file)
             # transcribe the audio
             output = model_asr.transcribe(audio, 2)
+            output = output["segments"]
+            print(f"Detected Word: {strip_format(output[0]['text']) if output != [] else '[Whisper found no speech]'}")
             text = request.body.decode()
-            print(output)
-            print(text)
-            if output['segments'] == text:
+            text = text[text.find(':') + 2 :]
+            text = text[: text.find('"')]
+            print(f"Wake Work: {strip_format(text)}")
+            if output != [] and strip_format(output[0]["text"]) == strip_format(text):
+                res = False
                 print("The wake word has been detected")
-                return is_wake_word, wake_probs
-            if output['segments'] != text:
-                print("******************************", end='')
-                return False, wake_probs
+                return True, wake_probs
+            else:
+                print("******************************")
+                # return False, wake_probs
 
 
 def start_wake_detection(request):
@@ -211,7 +237,6 @@ def int2float(sound):
     Convert the integer audio data to float
     :param sound: The audio data
     :return: The audio data in float format
-
     """
     abs_max = np.abs(sound).max()
     sound = sound.astype('float32')
@@ -220,9 +245,10 @@ def int2float(sound):
     sound = sound.squeeze()  # depends on the use case
     return sound
 
+
 def get_latest_audio(stream, data):
     """
-    Get the latest audio data
+    Grabs the latest audio data
     :param stream: The open stream object
     :param data: The audio data accumulated so far
     :return: The latest audio data
@@ -245,8 +271,8 @@ def transcribe_audio(request):
     Should be called after the wake word is detected
     :param request: The request object
     :return: The transcription of the audio
-    :description: Record the incoming audio, till 5 second of silence is detected, then transcribe the audio and align the transcription with the audio
-
+    :description: Record the incoming audio, till 5 second of silence is detected, 
+    then transcribe the audio and align the transcription with the audio
     """
     audio = pyaudio.PyAudio()
     stream = audio.open(format=FORMAT,
@@ -266,7 +292,7 @@ def transcribe_audio(request):
 
     while continue_recording:
         # Record the incoming audio
-        audio_float32 = get_latest_audio()
+        audio_float32 = get_latest_audio(stream, data)
         
         # Check if the audio is silent and if so count the number of milliseconds
         try:
