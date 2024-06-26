@@ -179,23 +179,11 @@ def wait_to_wake(stream, model, request):
         # check if the wake word is detected
         is_word, wake_probs = check_for_word(curr_chunk, frames, data, model, request)
         if is_word:
-            # save the audio data to a file
-            wav_file = save_file(data)
-            audio = whisperx.load_audio(wav_file)
-            # transcribe the audio
-            output = model_asr.transcribe(audio, 2)
-            output = output["segments"]
-            print(f"Detected Word: {strip_format(output[0]['text']) if output != [] else '[Whisper found no speech]'}")
-            text = request.body.decode()
-            text = text[text.find(':') + 2 :]
-            text = text[: text.find('"')]
-            print(f"Wake Work: {strip_format(text)}")
-            if output != [] and strip_format(output[0]["text"]) == strip_format(text):
-                res = False
-                print("The wake word has been detected")
-                return True, wake_probs
-            else:
-                print("******************************")
+            res = False
+            print("The wake word has been detected")
+            return True, wake_probs
+        else:
+            print(".", end='')
                 # return False, wake_probs
 
 
