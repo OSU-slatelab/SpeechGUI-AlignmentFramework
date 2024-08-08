@@ -19,6 +19,7 @@ If the wake gesture is detected, audio input is taken in from the microphone fro
 In order to capture audio input, a VirtualBox VM with Ubuntu must be utilized due to WSL failing to capture microphone input appropriately.
 
 [Download Ubuntu Desktop ISO image](https://ubuntu.com/download/desktop)
+
 [Follow instructions for VM creation](https://ubuntu.com/tutorials/how-to-run-ubuntu-desktop-on-a-virtual-machine-using-virtualbox#1-overview)
 
 Download VirtualBox extension to allow for webcam access and audio input.
