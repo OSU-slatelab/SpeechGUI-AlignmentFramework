@@ -18,18 +18,17 @@ If the wake gesture is detected, audio input is taken in from the microphone fro
 ### VirtualBox VM
 In order to capture audio input, a VirtualBox VM with Ubuntu must be utilized due to WSL failing to capture microphone input appropriately.
 
-<ol>
-    <li>[Download Ubuntu Desktop ISO image](https://ubuntu.com/download/desktop)</li>
-    <li>[Follow instructions for VM creation](https://ubuntu.com/tutorials/how-to-run-ubuntu-desktop-on-a-virtual-machine-using-virtualbox#1-overview)</li>
-    <li>Download VirtualBox extension to allow for webcam access and audio input.</li>
+[Download Ubuntu Desktop ISO image](https://ubuntu.com/download/desktop)
+[Follow instructions for VM creation](https://ubuntu.com/tutorials/how-to-run-ubuntu-desktop-on-a-virtual-machine-using-virtualbox#1-overview)
+
+Download VirtualBox extension to allow for webcam access and audio input.
         <ol>
             <li>[Extension download](https://www.virtualbox.org/wiki/Downloads)</li>
             <li>Extension can be accessed within the Oracle VM VirtualBox Manager in Files > Tools > Extension Pack Manager</li>
             <li>Within the VM, go to Devices > Webcams and turn on the desired webcam and go to Devices > Audio and turn on Audio Input.</li>
-            <li>[(Mostly) accurate instructions from Medium](https://medium.com/nerd-for-tech/how-to-use-camera-in-windows-10-virtualbox-aa92ffbe1f24)
         </ol>
-</ol>
 
+[(Mostly) accurate instructions from Medium](https://medium.com/nerd-for-tech/how-to-use-camera-in-windows-10-virtualbox-aa92ffbe1f24)
 ### Conda Environment 
 Install Conda within the Ubuntu VM to allow for environment setup. 
 To successfully install the client environment needed to run this code, run the following commands:
@@ -54,7 +53,7 @@ Once PyTorch is installed you can let pip handle the rest. You can use conda if 
 pip install -r client_audio_requirements.txt
 pip install -r client_video_requirements.txt
 ```
-Your client environment should now be set up. For the server environment, run `pip install -r server_requirements.txt`.
+Your client environment should now be set up. For the server environment, run `pip install -r
 
 ### VSCode Installation 
 Download Debian file for [VSCode in Ubuntu](https://code.visualstudio.com/download) and then run the following commnands:
