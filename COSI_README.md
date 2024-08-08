@@ -29,7 +29,7 @@ Download VirtualBox extension to allow for webcam access and audio input.
             <li>Within the VM, go to Devices > Webcams and turn on the desired webcam and go to Devices > Audio and turn on Audio Input.</li>
         </ol>
 
-[(Mostly) accurate instructions from Medium](https://medium.com/nerd-for-tech/how-to-use-camera-in-windows-10-virtualbox-aa92ffbe1f24)
+[(Mostly) accurate VirtualBox extension instructions from Medium](https://medium.com/nerd-for-tech/how-to-use-camera-in-windows-10-virtualbox-aa92ffbe1f24)
 ### Conda Environment 
 Install Conda within the Ubuntu VM to allow for environment setup. 
 To successfully install the client environment needed to run this code, run the following commands:
