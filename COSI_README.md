@@ -13,7 +13,7 @@ This code allows for wake gesture detection for the COSI chatbot system through 
   <li>ILoveYou</li>
 </ul>
 
-If the wake gesture is detected, audio input is taken in from the microphone from the local device and processed on the client front-end for transcription using Whisper. 
+If the wake gesture is detected, audio input is taken in from the microphone from the local device and processed on either the client front-end or server back-end for transcription using Whisper. 
 
 ### VirtualBox VM
 In order to capture audio input, a VirtualBox VM with Ubuntu must be utilized due to WSL failing to capture microphone input appropriately.
@@ -44,16 +44,25 @@ sudo ldconfig
 ```
 This will install portaudio. You need port audio in order to successfully install PyAudio. You can then proceed with installing python requirements. Start by install PyTorch first. Note: You must use 2.0.0.
 ```
-conda create --name speechgui --file client_audio_requirements_versionless.txt
-conda activate speechgui
+conda create --name cosi_client --file audio_requirements_versionless.txt
+conda activate cosi_client
 pip install torch==2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 Once PyTorch is installed you can let pip handle the rest. You can use conda if you want, but do not install PyAudio with Conda. There is a known issue with the default package build that conda selects for 0.2.14. Use the default package from pip to avoid this.
 ```
-pip install -r client_audio_requirements.txt
-pip install -r client_video_requirements.txt
+pip install -r audio_requirements.txt
+pip install -r client_requirements.txt
 ```
-Your client environment should now be set up. For the server environment, run `pip install -r
+Your client environment should now be set up. 
+
+For the server environment, run the following commands:
+```
+conda create --name cosi_server --file audio_requirements_versionless.txt
+conda activate cosi_server
+pip install torch==2.0.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install -r audio_requirements.txt
+pip install -r server_requirements.txt
+```
 
 ### VSCode Installation 
 Download Debian file for [VSCode in Ubuntu](https://code.visualstudio.com/download) and then run the following commnands:
@@ -71,7 +80,8 @@ First, establish port forwarding between the client and server using the followi
 ```
 ssh -L [local_address]:[remote_server_port] [username]@[remote_server]
 ```
-Within the code currently, the local address will be 5000:localhost and the remote server port will be 8000. Once the port forwarding is established, run the server.py program on the server and wait for "Server waiting..." to be outputted within the terminal. Then, run the following command where "gesture" represents the one of the recognized Mediapipe gestures to be used as a wake gesture:
+Within the code currently, the local address will be 5000:localhost and the remote server port will be 8000. Once the port forwarding is established, run the server.py program on the server and wait for "Server waiting..." to be outputted within the terminal. Then, run the following command where "gesture" represents the one of the recognized Mediapipe gestures to be used as a wake gesture and "audio_processing" represents the location where audio processing occurs between the client and server program:
 ```
-python client.py gesture 
+python client.py gesture audio_processing
+Example: python client.py Closed_Fist server 
 ```

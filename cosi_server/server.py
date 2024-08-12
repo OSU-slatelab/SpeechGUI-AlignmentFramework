@@ -4,12 +4,24 @@ import websockets
 import base64
 import json
 import torch
+import pyaudio
+import whisperx
+import wave
 import numpy as np
 import mediapipe as mp
 
 from ultralytics import YOLO
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+SAMPLE_RATE = 16000
+model_asr = whisperx.load_model("small", 'cpu', compute_type="int8", language="en")
+whisperx_align, metadata = whisperx.load_align_model(language_code="en", device="cpu")
+model_vad, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+                                model='silero_vad',
+                                force_reload=True)
 
 class Mp_Hands():
     def __init__(self) -> None:
@@ -258,91 +270,142 @@ def get_image(x1, y1, x2, y2, image):
     
     return cropped_region
 
+def save_file(data):
+    """
+    Saves the audio file to the disk
+    :param data: List of audio data chunks
+    :return: The name of the saved file
+    
+    """
+    output_file = "my_voice.wav"
+    sample_width = 2  # 2 bytes for 16-bit audio, 1 byte for 8-bit audio
+    with wave.open(output_file, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(SAMPLE_RATE)
+
+        for chunk in data:
+            wf.writeframes(chunk)
+        wf.close()
+    return output_file
 
 
-async def process_video(websocket):
+async def process_input(websocket):
     print("Connection established")
+    count = 0
+    audio_data = []
     while True:
         try: 
             async for message in websocket: 
-                print("Received video frame")
                 data = json.loads(message)
-                frame_data = data["frame"]
 
-                frame = np.frombuffer(base64.b64decode(frame_data), dtype=np.uint8)
-                frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+                if data["data_type"] == "video":
+                    print("Received video frame")
+                    frame_data = data["frame"]
 
-                mp_hands_detector = Mp_Hands()
-                mp_face_detector = Mp_Face_Detection()
+                    frame = np.frombuffer(base64.b64decode(frame_data), dtype=np.uint8)
+                    frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
 
-                Global_Track = Global_View()
+                    mp_hands_detector = Mp_Hands()
+                    mp_face_detector = Mp_Face_Detection()
 
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-                model = YOLO('yolov8n-pose.pt').to(device)
+                    Global_Track = Global_View()
 
-                results = model.track(frame, persist=True, conf = 0.5)
+                    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                    model = YOLO('yolov8n-pose.pt').to(device)
 
-                engagements, engagement_scores, gestures, gesture_scores, ages, age_scores = [], [], [], [], [], []
+                    results = model.track(frame, persist=True, conf = 0.5)
 
-                if results[0].boxes.id is not None: 
-                    boxes = results[0].boxes.xywh.cpu()
-                    confs = results[0].boxes.conf.cpu()
-                    track_ids = results[0].boxes.id.int().cpu().tolist()
+                    engagements, engagement_scores, gestures, gesture_scores, ages, age_scores = [], [], [], [], [], []
 
-                    original_image = frame
+                    if results[0].boxes.id is not None: 
+                        boxes = results[0].boxes.xywh.cpu()
+                        confs = results[0].boxes.conf.cpu()
+                        track_ids = results[0].boxes.id.int().cpu().tolist()
 
-                    for box, conf, track_id in zip(boxes,confs,track_ids):
-                        Global_Track.add_person(track_id)
-                        feat_box = {}
-                        xc, yc, w, h = map(int, box)
-                        x1 , y1 = xc-w/2, yc-h/2
-                        x2, y2 = xc+w/2, yc+h/2
-                        x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
-                        feat_box['bbox'] = [x1, y1, x2, y2]
-                        feat_box['conf'] = conf
-                        feat_box['id'] = track_id
+                        original_image = frame
 
-                        #Feed each cropped image to its corresponding classifiers to retrieve face and 
-                        #hand landmark points.         
-                        cropped_image = get_image(x1, y1, x2, y2, image=original_image)
+                        for box, conf, track_id in zip(boxes,confs,track_ids):
+                            Global_Track.add_person(track_id)
+                            feat_box = {}
+                            xc, yc, w, h = map(int, box)
+                            x1 , y1 = xc-w/2, yc-h/2
+                            x2, y2 = xc+w/2, yc+h/2
+                            x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
+                            feat_box['bbox'] = [x1, y1, x2, y2]
+                            feat_box['conf'] = conf
+                            feat_box['id'] = track_id
 
-                        mesh_image, engagement = Global_Track.people_track[track_id].get_mesh(cropped_image)
-                        engagements.append(engagement)
-                        engagement_scores.append(conf.item())
+                            #Feed each cropped image to its corresponding classifiers to retrieve face and 
+                            #hand landmark points.         
+                            cropped_image = get_image(x1, y1, x2, y2, image=original_image)
 
-                        mesh_image, gesture, gesture_score = Global_Track.people_track[track_id].get_hands(mesh_image)
-                        gestures.append(gesture)
-                        gesture_scores.append(gesture_score)
+                            mesh_image, engagement = Global_Track.people_track[track_id].get_mesh(cropped_image)
+                            engagements.append(engagement)
+                            engagement_scores.append(conf.item())
 
-                        #Insert edited image back to original image.            
-                        original_image[y1:y2, x1:x2] = mesh_image
+                            mesh_image, gesture, gesture_score = Global_Track.people_track[track_id].get_hands(mesh_image)
+                            gestures.append(gesture)
+                            gesture_scores.append(gesture_score)
 
-                        #Add confidence and ID to the detected person.
-                        output_frame = plot_object_id(feat_box,original_image)
+                            #Insert edited image back to original image.            
+                            original_image[y1:y2, x1:x2] = mesh_image
 
-                else:
-                    output_frame = frame
-                    gestures.append("N/A")
-                    gesture_scores.append("N/A")
-                    engagements.append("N/A")
-                    engagement_scores.append("N/A")
+                            #Add confidence and ID to the detected person.
+                            output_frame = plot_object_id(feat_box,original_image)
 
-                # Encode frame as JPEG
-                _, buffer = cv2.imencode('.jpg', output_frame)
-                output_frame_data = base64.b64encode(buffer).decode('utf-8')
+                    else:
+                        output_frame = frame
+                        gestures.append("N/A")
+                        gesture_scores.append("N/A")
+                        engagements.append("N/A")
+                        engagement_scores.append("N/A")
 
-                # Stores frame and gesture data into json to send back to client
-                payload = json.dumps({'frame': output_frame_data, 'gesture': gestures, 'gesture_score': gesture_scores, 'engagement': engagements, 'engagement_score': engagement_scores})
+                    # Encode frame as JPEG
+                    _, buffer = cv2.imencode('.jpg', output_frame)
+                    output_frame_data = base64.b64encode(buffer).decode('utf-8')
 
-                # Sends frame to the client
-                await websocket.send(payload)
-                print("Sent video frame")
+                    # Stores frame and gesture data into json to send back to client
+                    payload = json.dumps({'frame': output_frame_data, 'gesture': gestures, 'gesture_score': gesture_scores, 'engagement': engagements, 'engagement_score': engagement_scores})
+
+                    # Sends frame to the client
+                    await websocket.send(payload)
+                    print("Sent video frame")
+
+                elif data["data_type"] == "audio":
+                    print("Received audio")
+                    audio_chunk = data['audio_chunk']
+                    audio_data.append(audio_chunk)
+
+                    if data["finished"] == True:
+                        audio_data = [base64.b64decode(encoded_audio) for encoded_audio in audio_data]
+
+                        print(str(count) + " milliseconds elapsed during waiting")
+                        res = save_file(audio_data)
+                        continue_recording = False
+                        # Transcribe the audio and align the transcription with the audio
+                        audio = whisperx.load_audio(res)
+                        result = model_asr.transcribe(audio, 2)
+                        result2 = whisperx.align(result["segments"], whisperx_align, metadata, audio, 'cpu', return_char_alignments=False)
+                        print(result["segments"][0]["text"]) if result["segments"] else print("No speech detected")
+                        print(result2["word_segments"])
+                        continue_recording = False
+                        results = result2["word_segments"]
+                        
+                        if result["segments"]:
+                            payload = json.dumps({"transcribed_audio": result["segments"][0]["text"]})
+                        else:
+                            payload = json.dumps({"transcribed_audio": "No speech detected"})
+
+                        # Sends transcribed audio to the client
+                        await websocket.send(payload)
+                        print("Sent transcribed audio")
 
         except Exception as e:
             print(f"An error occurred: {e}")
             await asyncio.sleep(1)  # Wait before retrying
 
-start_server = websockets.serve(process_video, "0.0.0.0", 8000)
+start_server = websockets.serve(process_input, "0.0.0.0", 8000)
 print("Server waiting...")
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()
