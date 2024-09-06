@@ -41,6 +41,8 @@ Once PyTorch is installed you can let pip handle the rest. You can use conda if 
 ```
 pip install -r requirements.txt
 ```
+We have added functionality to make hosting models remotely possible. Please follow the [install instructions](https://github.com/pytorch/serve) for Torch Serve in order to use the move-models branch. This is an ongoing work in progress. And HTTPS request functionality is only partially established. 
+
 Your environment should now be set up. 
 
 ### Running the Program
