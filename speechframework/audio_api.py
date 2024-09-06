@@ -33,7 +33,7 @@ def check_model_health(ip_addr):
         print(f"Error connecting to TorchServe: {e}")
         return False
 
-def initialize_model_setup(ip_addr, model_name, device="cpu"):
+def initialize_model_setup(ip_addr, model_name, device="cpu", model_dict=None):
     """
     Start model locally or check connection to remote model
     :param ip_addr: The IP address of the model (None if model needs to be run locally)
@@ -41,12 +41,13 @@ def initialize_model_setup(ip_addr, model_name, device="cpu"):
     "param whisperx", or "wake".
     :device: the torch device on which your model should run if you are running locally
     """
-    if ip_addr is None:
+    if model_dict is None:
         model_dict = {}
+    if ip_addr is None:
         if model_name == "silero_vad":
             model_vad, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
                                         model='silero_vad',
-                                        force_reload=True)
+                                        force_reload=False)
             model_dict["silence"] = model_vad
             model_dict["silence_utils"] = utils
         elif model_name == "whisperx":
@@ -74,7 +75,7 @@ def initialize_model_setup(ip_addr, model_name, device="cpu"):
         return model_dict
     elif check_model_health(ip_addr):
         print(f"Successfully pinged {model_name} model")
-        # TODO Fill in model_dict where model_dict[model_name] = callable remote model. Call needs to send the input to the remote model similar to check_model_health
+        # TODO Fill in model_dict where model_dict[model_name] = function that sends inference call to model. 
         # This will require looking at the torch serve documentation and seeing how you are supposed to pass remote models data
         # https://medium.com/@sepideh.hosseinian/how-to-serve-pytorch-models-in-production-with-torch-serving-d24792693925
     else:
@@ -242,7 +243,7 @@ def wait_to_wake(stream, request, chunk_sz=1024, models={}):
             print("The wake word has been detected")
             return True, wake_probs
         else:
-            print(".", end='')
+            print(".", end='', flush=True)
                 # return False, wake_probs
 
 def wait_to_wake_whisper(stream, request, chunk=1024, models={}):
@@ -326,7 +327,7 @@ def int2float(sound):
     return sound
 
 
-def get_latest_audio(stream, data, chunk_sz=1024):
+def get_latest_audio(stream, data, chunk_sz=512):
     """
     Grabs the latest audio data
     :param stream: The open stream object
@@ -383,10 +384,8 @@ def transcribe_audio(request, format=pyaudio.paInt16, channels=1, rate=16000, ch
         try:
             new_confidence = models["silence"](audio_float32, rate).item()
         except Exception:
-            # TODO Fix bug. Currently won't let us call models["silence"] because:
-            # builtins.ValueError: Provided number of samples is 1024 (Supported values: 256 for 8000 sample rate, 512 for 16000)
             print(f"audio_float32: {audio_float32, audio_float32.shape}")
-            raise(ValueError("Fix TODO: passing too many samples. See line 386"))
+            raise(ValueError("Probably a mismatch in the number of samples you are passing and the number the silence model expects. See line 386"))
             exit()
             #save_file()
         is_voice = round(new_confidence)
@@ -426,11 +425,11 @@ def init_models(models={}, wake=True, asr=True, silence=True, wake_ip=None, asr_
     :param silence_ip: The IP address the silence model is being served on (local models have silence_ip = None)
     """
     if wake and "wake" not in models.keys():
-        models = initialize_model_setup(wake_ip, "wake")
+        models = initialize_model_setup(wake_ip, "wake", model_dict=models)
     if asr and "asr" not in models.keys():
-        models = initialize_model_setup(asr_ip, "whisperx")
+        models = initialize_model_setup(asr_ip, "whisperx", model_dict=models)
     if silence and "silence" not in models.keys():
-        models = initialize_model_setup(silence_ip, "silero_vad")
+        models = initialize_model_setup(silence_ip, "silero_vad", model_dict=models)
     return models
 
 
@@ -441,7 +440,7 @@ def wake_and_asr(request, models=None):
     :param models: The dictionary of all models that have been loaded if any, else None or {}
     :return: The transcription of the audio
     """
-    models = init_models(model)
+    models = init_models(models)
     
     start_wake_detection(request, models=models)
     results = transcribe_audio(request, models=models)
