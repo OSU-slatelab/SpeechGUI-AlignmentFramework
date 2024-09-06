@@ -3,6 +3,7 @@ from django.template import loader
 from transformers import BertTokenizer
 from django.shortcuts import render
 import speechframework.audio_api as audio_api
+from pdb import set_trace as bp
 TOK = BertTokenizer.from_pretrained('bert-base-uncased')
 
 
@@ -29,7 +30,8 @@ def audio_main(request):
     :description: This method opens the audio stream, loads the wake word model and waits for the wake word to start the recording, once detected, it renders the page.html template
 
     """
-    audio_api.start_wake_detection(request)
+    models = audio_api.init_models()
+    audio_api.start_wake_detection(request, models=models)
     return render(request, template_name='page.html')
 
 

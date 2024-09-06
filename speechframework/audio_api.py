@@ -12,57 +12,108 @@ import torch.nn as nn
 import sys
 from string import punctuation
 from pdb import set_trace as bp
+import os
+import requests
 
+def check_model_health(ip_addr):
+    """
+    Check whether we can connect to a given IP address.
+    :param ip_addr: The IP address your model is located at
+    :param return: bool representing if able to connect
+    """
+    try:
+        response = requests.get(f'{ip_addr}/ping')
+        if response.status_code == 200:
+            print("TorchServe is up and running.")
+            return True
+        else:
+            print(f"Health check failed with status code: {response.status_code}")
+            return False
+    except requests.exceptions.RequestException as e:
+        print(f"Error connecting to TorchServe: {e}")
+        return False
 
-TOK = BertTokenizer.from_pretrained('bert-base-uncased')
-model_asr = whisperx.load_model("small", 'cpu', compute_type="int8", language="en")
-whisperx_align, metadata = whisperx.load_align_model(language_code="en", device="cpu")
-model_vad, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
-                                model='silero_vad',
-                                force_reload=True)
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-SAMPLE_RATE = 16000
-CHUNK = 1024
-(get_speech_timestamps,
- save_audio,
- read_audio,
- VADIterator,
- collect_chunks) = utils
+def initialize_model_setup(ip_addr, model_name, device="cpu"):
+    """
+    Start model locally or check connection to remote model
+    :param ip_addr: The IP address of the model (None if model needs to be run locally)
+    :param model_name: The name of the model you are trying to setup. Must be ""silero_vad",
+    "param whisperx", or "wake".
+    :device: the torch device on which your model should run if you are running locally
+    """
+    if ip_addr is None:
+        model_dict = {}
+        if model_name == "silero_vad":
+            model_vad, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+                                        model='silero_vad',
+                                        force_reload=True)
+            model_dict["silence"] = model_vad
+            model_dict["silence_utils"] = utils
+        elif model_name == "whisperx":
+            model_asr = whisperx.load_model("small", 'cpu', compute_type="int8", language="en")
+            whisperx_align, metadata = whisperx.load_align_model(language_code="en", device=device)
+            model_dict["asr"] = model_asr
+            model_dict["asr_align"] = whisperx_align
+            model_dict["asr_metadata"] = metadata
+        elif model_name == "wake":
+            checkpoint_path = "word_level_train_015_256_bert1_st00_2fc_conf_16_sig_bce_rop_80.pt"
+            pretrained_model = torch.load(checkpoint_path, map_location=device)
+            model_state_dict = pretrained_model["model_state_dict"]
+            model_params = {'num_classes': pretrained_model['model_params']['num_classes'],
+                            'feature_size': pretrained_model['model_params']['feature_size'],
+                            'hidden_size': pretrained_model['model_params']['hidden_size'],
+                            'num_layers': pretrained_model['model_params']['num_layers'],
+                            'dropout': pretrained_model['model_params']['dropout'],
+                            'bidirectional': pretrained_model['model_params']['bidirectional'],
+                            'device': device}  
+            model = ConformerModel(**model_params)
+            model.load_state_dict(model_state_dict)
+            model.eval()
+            model_dict["wake"] = model
+            model_dict["wake_tokenizer"] = BertTokenizer.from_pretrained('bert-base-uncased')
+        return model_dict
+    elif check_model_health(ip_addr):
+        print(f"Successfully pinged {model_name} model")
+        # TODO Fill in model_dict where model_dict[model_name] = callable remote model. Call needs to send the input to the remote model similar to check_model_health
+        # This will require looking at the torch serve documentation and seeing how you are supposed to pass remote models data
+        # https://medium.com/@sepideh.hosseinian/how-to-serve-pytorch-models-in-production-with-torch-serving-d24792693925
+    else:
+        raise(f"Cannot contact the {model_name} model. Was the model launched at the given IP address, {ip_addr}?")
+        
 
-vad_iterator = VADIterator(model_vad)
-
-
-def save_file(data):
+def save_file(data, channel=1, rate=16000):
     """
     Saves the audio file to the disk
     :param data: List of audio data chunks
+    :param channel: the number of audio channels
+    :param rate: The sample/frame rate
     :return: The name of the saved file
     
     """
     output_file = "my_voice.wav"
     sample_width = 2  # 2 bytes for 16-bit audio, 1 byte for 8-bit audio
     with wave.open(output_file, 'wb') as wf:
-        wf.setnchannels(CHANNELS)
+        wf.setnchannels(channel)
         wf.setsampwidth(sample_width)
-        wf.setframerate(SAMPLE_RATE)
+        wf.setframerate(rate)
 
         for chunk in data:
             wf.writeframes(chunk)
         wf.close()
     return output_file
 
-def load_wavform(file):
+def load_wavform(file, rate=16000):
     """
-    Loads wavform file with a sample rate of 16000
-    :file: The path to the file to load
+    Loads wavform file with a given sample rate
+    :param file: The path to the file to load
+    :param rate: The sample rate of the audio
     :return: The loaded wavform object
     """
     wavform, sr = torchaudio.load(file)
 
     wavform = wavform.type('torch.FloatTensor')
-    if sr > 16000:
-        wavform = torchaudio.transforms.Resample(sr, 16000)(wavform)
+    if sr > rate:
+        wavform = torchaudio.transforms.Resample(sr, rate)(wavform)
     return wavform
 
 
@@ -82,22 +133,23 @@ def get_features(wavform):
 
     return features
 
-def get_text(request):
+def get_text(request, tokenizer):
     """
     Tokenizes the text
     :param request: The request object
+    :param tokenizer: The tokenizer to use to encode text.
     :return: The tokenized text
     
     """
     text = request.body.decode() 
-    text = TOK(text).input_ids
+    text = tokenizer(text).input_ids
     text = torch.tensor(text)
     text = [text]
     text = pack_sequence(text, enforce_sorted=False)
     return text
 
 
-def get_match_probs(indata, frames, data, model, request):
+def get_match_probs(indata, frames, data, model, tokenizer, request, chunk_sz=1024):
     """
     If enough frames are collected, gets the probability they match the wake word
     :param indata: The current input chunk of audio data
@@ -107,11 +159,11 @@ def get_match_probs(indata, frames, data, model, request):
     :param request: The request object
     :return: The probability the wake word is present in the given audio segments or None if not enough frames
     """
-    # get most recent audio chunk into np array of size 1024
+    # get most recent audio chunk into np array of size chunk_sz
     indata = np.frombuffer(indata, np.int8)
     a = int(indata.size)
-    if a < 1024:
-        indata = np.pad(indata, (0, 1024-a), mode='constant', constant_values=0)
+    if a < chunk_sz:
+        indata = np.pad(indata, (0, chunk_sz-a), mode='constant', constant_values=0)
 
     # add the chunk to our frames
     frames.append(indata)  # Apply windowing function to the input frame
@@ -128,13 +180,13 @@ def get_match_probs(indata, frames, data, model, request):
         wavform = load_wavform(wav_file)
         features = get_features(wavform)
         # The word selected by the user on the front end
-        text = get_text(request)
+        text = get_text(request, tokenizer)
         with torch.no_grad():
             output = model(features, text)
     return output
     
 
-def check_for_word(indata, frames, data, model, request):
+def check_for_word(indata, frames, data, model, tokenizer, request):
     """
     Determines if a word was found
     :param indata: The current input chunk of audio data
@@ -144,7 +196,7 @@ def check_for_word(indata, frames, data, model, request):
     :param request: The request object
     :returns: whether a word was found and the match probability if it was found (otherwise None)
     """
-    output = get_match_probs(indata, frames, data, model, request)
+    output = get_match_probs(indata, frames, data, model, tokenizer, request)
     # If the model outputs the word is detected with a confidence of 0.75 or more, we return True
     if output is None or np.where(output < 0.75, 0, 1) != 1:
         return False, None
@@ -154,30 +206,37 @@ def check_for_word(indata, frames, data, model, request):
 
 
 def strip_format(s):
+    """
+    Removes punctuation, whitespace, and capitalization
+    :param s: the string to format
+    :return: the altered string
+    """
     s = s.translate(str.maketrans('', '', punctuation))
     s = s.strip()
     s = s.lower()
     return s
 
-def wait_to_wake(stream, model, request):
+def wait_to_wake(stream, request, chunk_sz=1024, models={}):
     """
-    Waits for the wake word 
+    Waits for the wake word then returns the calculated probability of match
     :param stream: The open stream object
-    :param model: Wake word detection model
     :param request: The request object
-    :return: The presence/absence of the wake word after double checking the transcription and the associated probabilities
-    :description: This method processes the incoming audio frames to look for the wake word
+    :param chunk_sz: The size of the audio you want to process
+    :param models: The dictionary of all models that have been loaded
+    :return: The probabilities the wake word was found after it check_for_word determines there is a match
     """
+    if not "wake" in models.keys():
+        models = init_models(models, wake=True, silence=False, asr=False)
     frames = []
     data = []
     res = True
     print("Now waiting....")
     while res:
         # add the current chunk to the data list
-        curr_chunk = stream.read(1024, exception_on_overflow=False)
+        curr_chunk = stream.read(chunk_sz, exception_on_overflow=False)
         data.append(curr_chunk)
         # check if the wake word is detected
-        is_word, wake_probs = check_for_word(curr_chunk, frames, data, model, request)
+        is_word, wake_probs = check_for_word(curr_chunk, frames, data, models["wake"], models["wake_tokenizer"], request)
         if is_word:
             res = False
             print("The wake word has been detected")
@@ -186,37 +245,70 @@ def wait_to_wake(stream, model, request):
             print(".", end='')
                 # return False, wake_probs
 
-
-def start_wake_detection(request):
+def wait_to_wake_whisper(stream, request, chunk=1024, models={}):
     """
-    Initialize audio processes in IKLE mode and wait for wake word
+    Waits for the wake word and returns match probabilities (do not use this unless you want to test using
+    WhisperX as the wake word model. It is high-latency)
+    :param stream: The open stream object
     :param request: The request object
-    :return: None
-    :description: This method opens the audio stream, loads the wake word model and waits for the wake word to return
-
+    :param chunk_sz: The size of the audio segment you want to process
+    :param models: The dictionary of all models that have been loaded
+    :return: The probabilities the wake word was found after it check_for_word determines there is a match
     """
+    if not "asr" in models.keys():
+        models = init_models(models, wake=False, silence=False)
+    frames = []
+    data = []
+    res = True
+    print("Now waiting....")
+    while res:
+        # add the current chunk to the data list
+        curr_chunk = stream.read(chunk, exception_on_overflow=False)
+        data.append(curr_chunk)
+        # save the audio data to a file
+        wav_file = save_file(data)
+        audio = whisperx.load_audio(wav_file)
+        # transcribe the audio
+        print(models["asr"])
+        output = (models["asr"]).transcribe(audio, 2)
+        output = output["segments"]
+        print(f"Detected Word: {strip_format(output[0]['text']) if output != [] else '[Whisper found no speech]'}")
+        text = request.body.decode()
+        text = text[text.find(':') + 2 :]
+        text = text[: text.find('"')]
+        print(f"Wake Work: {strip_format(text)}")
+        if output != [] and strip_format(output[0]["text"]) == strip_format(text):
+            res = False
+            print("The wake word has been detected")
+            return True, wake_probs
+        else:
+            print("******************************")
+
+
+def start_wake_detection(request, format=pyaudio.paInt16, channels=1, rate=16000, frames_per_buffer=1024, models={}):
+    """
+    This method opens the audio stream, loads the wake word model and waits for the wake word to return (IKLE mode)
+    :param request: The HTML request object
+    :param format: The format of the audio stream you want to open 
+    :param channel: the number of audio channels
+    :param rate: The sample rate of the audio
+    :param frames_per_buffer: 
+    :param models: The dictionary of all models that have been loaded
+    :return: he probabilities the wake word was found after it check_for_word determines there is a match
+    """
+    if "wake" not in models.keys():
+        models = init_models(models, wake=True, asr=False, silence=False)
+
     audio = pyaudio.PyAudio()
-    stream = audio.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=SAMPLE_RATE,
+    stream = audio.open(format=format,
+                        channels=channels,
+                        rate=rate,
                         input=True,
-                        frames_per_buffer=1024)
+                        frames_per_buffer=frames_per_buffer)
     device = torch.device('cpu')
-    checkpoint_path = "word_level_train_015_256_bert1_st00_2fc_conf_16_sig_bce_rop_80.pt"
-    pretrained_model = torch.load(checkpoint_path, map_location=device)
-    model_state_dict = pretrained_model["model_state_dict"]
-    model_params = {'num_classes': pretrained_model['model_params']['num_classes'],
-                    'feature_size': pretrained_model['model_params']['feature_size'],
-                    'hidden_size': pretrained_model['model_params']['hidden_size'],
-                    'num_layers': pretrained_model['model_params']['num_layers'],
-                    'dropout': pretrained_model['model_params']['dropout'],
-                    'bidirectional': pretrained_model['model_params']['bidirectional'],
-                    'device': device}
-    model = ConformerModel(**model_params)
-    model.load_state_dict(model_state_dict)
-    model.eval()
+    # load wake word model here
     print("Waiting for the wake word to start the recording (Wake word detector):")
-    is_wake_word, wake_probs = wait_to_wake(stream, model, request)
+    wake_probs = wait_to_wake(stream, request, models=models)
     return wake_probs
 
 
@@ -234,14 +326,14 @@ def int2float(sound):
     return sound
 
 
-def get_latest_audio(stream, data):
+def get_latest_audio(stream, data, chunk_sz=1024):
     """
     Grabs the latest audio data
     :param stream: The open stream object
     :param data: The audio data accumulated so far
     :return: The latest audio data
     """
-    audio_chunk = stream.read(1024, exception_on_overflow=False)
+    audio_chunk = stream.read(chunk_sz, exception_on_overflow=False)
     data.append(audio_chunk)
     audio_int16 = np.frombuffer(audio_chunk, np.int16)
     audio_float32 = int2float(audio_int16)
@@ -253,21 +345,26 @@ def get_latest_audio(stream, data):
     return audio_float32
 
 
-def transcribe_audio(request):
+def transcribe_audio(request, format=pyaudio.paInt16, channels=1, rate=16000, chunk=1024, models={}):
     """
-    Records and transcribes the audio
-    Should be called after the wake word is detected
-    :param request: The request object
-    :return: The transcription of the audio
-    :description: Record the incoming audio, till 5 second of silence is detected, 
+    Record the incoming audio, till 5 second of silence is detected, 
     then transcribe the audio and align the transcription with the audio
+    :param request: The request object
+    :param format: The format of the audio stream you want to open 
+    :param channel: the number of audio channels
+    :param rate: The sample rate of the audio
+    :param chunk: The size of the audio segment you want to process
+    :return: The transcription of the audio
     """
+    models = init_models(models, wake=False, asr=True, silence=True)
+
+
     audio = pyaudio.PyAudio()
-    stream = audio.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=SAMPLE_RATE,
+    stream = audio.open(format=format,
+                        channels=channels,
+                        rate=rate,
                         input=True,
-                        frames_per_buffer=1024)
+                        frames_per_buffer=chunk)
     
     if request.method == 'POST':
         is_wake_word = True
@@ -284,9 +381,14 @@ def transcribe_audio(request):
         
         # Check if the audio is silent and if so count the number of milliseconds
         try:
-            new_confidence = model_vad(audio_float32, 16000).item()
+            new_confidence = models["silence"](audio_float32, rate).item()
         except Exception:
-            save_file()
+            # TODO Fix bug. Currently won't let us call models["silence"] because:
+            # builtins.ValueError: Provided number of samples is 1024 (Supported values: 256 for 8000 sample rate, 512 for 16000)
+            print(f"audio_float32: {audio_float32, audio_float32.shape}")
+            raise(ValueError("Fix TODO: passing too many samples. See line 386"))
+            exit()
+            #save_file()
         is_voice = round(new_confidence)
         if is_voice == 0:
             count += 1
@@ -301,8 +403,8 @@ def transcribe_audio(request):
             continue_recording = False
             # Transcribe the audio and align the transcription with the audio
             audio = whisperx.load_audio(res)
-            result = model_asr.transcribe(audio, 2)
-            result2 = whisperx.align(result["segments"], whisperx_align, metadata, audio, 'cpu', return_char_alignments=False)
+            result = models["asr"].transcribe(audio, 2)
+            result2 = whisperx.align(result["segments"], models["asr_align"], models["asr_metadata"], audio, 'cpu', return_char_alignments=False)
             print(result["segments"][0]["text"]) if result["segments"] else print("No speech detected")
             print(result2["word_segments"])
             continue_recording = False
@@ -312,13 +414,35 @@ def transcribe_audio(request):
             print(results)
             return results
 
+def init_models(models={}, wake=True, asr=True, silence=True, wake_ip=None, asr_ip=None, silence_ip=None):
+    """
+    Load up local neural network models and ping network models
+    :param models:
+    :param wake: Whether to load/ping the wake model
+    :param asr: Whether to load/ping the asr model
+    :param silence: Whether to load/ping the silence model
+    :param wake_ip: The IP address the wake model is being served on (local models have wake_ip = None)
+    :param asr_ip: The IP address the asr model is being served on (local models have asr_ip = None)
+    :param silence_ip: The IP address the silence model is being served on (local models have silence_ip = None)
+    """
+    if wake and "wake" not in models.keys():
+        models = initialize_model_setup(wake_ip, "wake")
+    if asr and "asr" not in models.keys():
+        models = initialize_model_setup(asr_ip, "whisperx")
+    if silence and "silence" not in models.keys():
+        models = initialize_model_setup(silence_ip, "silero_vad")
+    return models
 
-def wake_and_asr(request):
+
+def wake_and_asr(request, models=None):
     """
     Wait for wake word and then transcribe the audio
-    :param request: The request object
+    :param request: The HTML request object
+    :param models: The dictionary of all models that have been loaded if any, else None or {}
     :return: The transcription of the audio
     """
-    start_wake_detection(request)
-    results = transcribe_audio(request)
+    models = init_models(model)
+    
+    start_wake_detection(request, models=models)
+    results = transcribe_audio(request, models=models)
     return results
